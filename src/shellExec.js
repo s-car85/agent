@@ -1,12 +1,6 @@
-// html/app/agent/src/shellExec.js  (AGENT)
-
 import { exec } from "child_process";
 import path from "path";
 
-/**
- * Registruje shell komande na AGENTU.
- * HUB će slati socket.emit("shell:exec", { cmd, cwd }, ack)
- */
 export function registerShellExec(socket, identity) {
     console.log('registerShellExec')
     const baseDir = identity?.baseDir || "/";

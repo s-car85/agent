@@ -4,6 +4,7 @@ import { getIdentity } from "./system_info.js";
 import { listDir, readFileBase64, writeFileBase64, makeDir, removePath } from "./fs_helper.js";
 import { registerShellExec } from "./shellExec.js";
 import { registerUpdateHub } from "./updateHub.js";
+import { updateHubDone } from "./updateHubDone.js";
 
 const identity = getIdentity(BASE_DIR);
 
@@ -39,7 +40,8 @@ function connect() {
 
   registerShellExec(socket); // registruje "shell:exec"
   registerUpdateHub(socket); // registruje "agent:update"
-
+  updateHubDone(socket); // registruje "agent:updateHubDone"
+  
   socket.on("fs:list", ackWrap(withBase((base, rel) => listDir(base, rel))));
   socket.on("fs:read", ackWrap(withBase((base, rel) => readFileBase64(base, rel))));
   socket.on("fs:write", ackWrap(withBase((base, rel, p) => writeFileBase64(base, rel, p.base64))));
