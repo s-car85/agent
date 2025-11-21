@@ -1,53 +1,57 @@
-// folderReceiver.js
 import fs from "fs/promises";
+import { createReadStream } from "fs";   // ⬅ OVO JE BITNO
 import path from "path";
+import unzipper from "unzipper";
 
 const DEFAULT_TARGET_DIR = "/home/pi/agent";
 
-// Bezbedno spajanje putanje da ne izađe iz baze
-function safeJoin(base, rel) {
-  const full = path.normalize(path.join(base, rel));
-  const normBase = path.normalize(base);
-  if (!full.startsWith(normBase)) {
-    throw new Error("Relativna putanja izlazi iz TARGET_DIR-a");
+async function cleanTargetDir(targetDir) {
+  const entries = await fs
+    .readdir(targetDir, { withFileTypes: true })
+    .catch(async (err) => {
+      if (err.code === "ENOENT") {
+        await fs.mkdir(targetDir, { recursive: true });
+        return [];
+      }
+      throw err;
+    });
+
+  for (const entry of entries) {
+    const full = path.join(targetDir, entry.name);
+    await fs.rm(full, { recursive: true, force: true });
   }
-  return full;
 }
 
 export function registerUpdateHub(socket, targetDir = DEFAULT_TARGET_DIR) {
-    console.log("📁 registerFolderReceiver, targetDir =", targetDir);
-    socket.on("agent:updateHubAppSend", async (payload, ack) => {
-      
-      try {
-        const { relPath, base64, mode, mtimeMs } = payload || {};
-        if (!relPath || typeof base64 !== "string") {
-          throw new Error("relPath i base64 su obavezni");
-        }
-  
-        const destPath = safeJoin(targetDir, relPath);
-        const destDir = path.dirname(destPath);
-  
-        await fs.mkdir(destDir, { recursive: true });
-        await fs.writeFile(destPath, Buffer.from(base64, "base64"));
-  
-        // permissions
-        if (typeof mode === "number") {
-          await fs.chmod(destPath, mode);
-        }
-  
-        // mtime
-        if (typeof mtimeMs === "number") {
-          const mtime = new Date(mtimeMs);
-          await fs.utimes(destPath, mtime, mtime);
-        }
-  
-        console.log("📥 Primljen fajl:", destPath);
-        ack?.({ ok: true });
-      } catch (e) {
-        console.error("❌ Greška folder:write:", e);
-        ack?.({ ok: false, error: e.message });
+  console.log("📁 registerUpdateHub ZIP, targetDir =", targetDir);
+
+  // ZIP UPDATE
+  socket.on("agent:updateZip", async ({ zipBase64 }, ack) => {
+    try {
+      if (!zipBase64 || typeof zipBase64 !== "string") {
+        throw new Error("zipBase64 je obavezan string");
       }
-    });
-  }
-  
-  
+
+      console.log("📦 Primljen ZIP (base64), zapisujem u /tmp/update.zip ...");
+      const tmpZip = "/tmp/agent_update.zip";
+
+      // snimi ZIP fajl
+      await fs.writeFile(tmpZip, Buffer.from(zipBase64, "base64"));
+
+      console.log("🧹 Čistim sadržaj targetDir:", targetDir);
+      await cleanTargetDir(targetDir);
+
+      console.log("📂 Raspakujem ZIP u", targetDir);
+      await createReadStream(tmpZip)
+        .pipe(unzipper.Extract({ path: targetDir }))
+        .promise();
+
+      console.log("✅ ZIP update završen.");
+      ack?.({ ok: true });
+
+    } catch (e) {
+      console.error("❌ Greška ZIP update na agentu:", e);
+      ack?.({ ok: false, error: e.message });
+    }
+  });
+}
