@@ -1,6 +1,12 @@
 import { execSync } from "child_process";
 import os from "os";
 import fs from "fs";
+import { readFile } from "fs/promises";
+
+async function loadJson(filePath) {
+  const data = await readFile(filePath, "utf8");
+  return JSON.parse(data);
+}
 
 function sh(cmd) {
   try {
@@ -10,13 +16,15 @@ function sh(cmd) {
   }
 }
 
-function readFile(path, def = null) {
+async function readJson(filePath, def = null) {
   try {
-    return fs.readFileSync(path, "utf8").trim();
-  } catch {
+    const data = await readFile(filePath, "utf8");
+    return JSON.parse(data);
+  } catch (e) {
     return def;
   }
 }
+
 
 // CPU osnovno
 function getCpuInfo() {
@@ -146,11 +154,14 @@ export function getPrimaryInterface() {
   return { name: "unknown", address: "0.0.0.0", mac: "00:00:00:00:00:00" };
 }
 
-export function getIdentity(baseDir) {
+export async function getIdentity(baseDir) {
   const { name, address, mac } = getPrimaryInterface();
+  const version = await loadJson("/home/pi/agent/version.json");
+  console.log(version)
   return {... getSysInfo(),
     mac,
     hostname: os.hostname(),
-    baseDir
+    baseDir,
+    version: version
   };
 }
